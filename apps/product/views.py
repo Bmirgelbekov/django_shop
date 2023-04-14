@@ -18,3 +18,4 @@ class ProductViewSet(viewsets.ModelViewSet):
         elif method in ['DELETE', 'PUT', 'PATCH']:
             self.permission_classes = [IsOwner]
         return super().get_permissions()
+    
