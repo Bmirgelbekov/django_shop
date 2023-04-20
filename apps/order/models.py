@@ -1,5 +1,9 @@
-from django.db import models
 from django.contrib.auth import get_user_model
+from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+from .tasks import send_confirmation_mail
 
 
 class OrderStatus(models.TextChoices):
@@ -15,7 +19,7 @@ class Order(models.Model):
         on_delete=models.CASCADE, 
         related_name='orders'
         )
-    total_price = models.DecimalField(max_digits=10, 
+    total_cost = models.DecimalField(max_digits=10, 
                                       decimal_places=2, 
                                       default=0)
     addres = models.CharField(max_length=255)
@@ -35,7 +39,7 @@ class Order(models.Model):
         verbose_name_plural = 'Информация о заказах'
 
     
-class OrderedItem(models.Model):
+class OrderItem(models.Model):
     order = models.ForeignKey(
         Order, 
         on_delete=models.CASCADE, 
@@ -52,7 +56,21 @@ class OrderedItem(models.Model):
     def __str__(self) -> str:
         return self.product.title
     
+    def save(self, *args, **kwargs):
+        self.total_cost = self.quantity * self.product.price
+        return super().save(self, *args, **kwargs)
+
     class Meta:
         verbose_name = 'Заказ'
         verbose_name_plural = 'Заказы'
         
+    
+@receiver(post_save, sender=Order)
+def send_order_confirmation_mail(sender: Order, instance: Order, created: bool, **kwargs):
+    if created:
+        send_confirmation_mail.delay(
+            instance.user.username,
+            instance.addres,
+            instance.pk,
+            instance.user.email
+        )
